@@ -11,11 +11,11 @@ String SpoolmanClient::_baseUrl() {
     return url;
 }
 
-void SpoolmanClient::_addAuthHeader(HTTPClient& http) {
-    if (!_config.apiKey().isEmpty()) {
-        http.addHeader("X-Api-Key", _config.apiKey());
-    }
-}
+// void SpoolmanClient::_addAuthHeader(HTTPClient& http) {
+//     if (!_config.apiKey().isEmpty()) {
+//         http.addHeader("X-Api-Key", _config.apiKey());
+//     }
+// }
 
 bool SpoolmanClient::fetchSpoolByRFID(const String& uid, SpoolInfo& out) {
     if (WiFi.status() != WL_CONNECTED) {
@@ -27,7 +27,7 @@ bool SpoolmanClient::fetchSpoolByRFID(const String& uid, SpoolInfo& out) {
     String url = _baseUrl() + "spool?rfid=" + uid;
     Serial.print("  GET "); Serial.println(url);
     http.begin(url);
-    _addAuthHeader(http);
+    //_addAuthHeader(http);
 
     int code = http.GET();
     Serial.printf("  HTTP response code: %d\n", code);
@@ -62,7 +62,7 @@ bool SpoolmanClient::updateSpoolWeight(int spoolId, float filamentWeight, float 
     Serial.print("  PATCH "); Serial.println(url);
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
-    _addAuthHeader(http);
+    //_addAuthHeader(http);
 
     DynamicJsonDocument doc(256);
     doc["used_weight"] = newUsed;
@@ -81,7 +81,7 @@ bool SpoolmanClient::checkStatus() {
 
     HTTPClient http;
     http.begin(_baseUrl());
-    _addAuthHeader(http);
+    //_addAuthHeader(http);
     http.setTimeout(5000);
     int code = http.GET();
     http.end();

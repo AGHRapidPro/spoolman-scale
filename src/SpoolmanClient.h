@@ -32,6 +32,6 @@ public:
 private:
     const Config& _config;
 
-    void   _addAuthHeader(HTTPClient& http);
+    //void   _addAuthHeader(HTTPClient& http);
     String _baseUrl();
 };

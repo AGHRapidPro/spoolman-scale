@@ -18,11 +18,14 @@ public:
     void startWiFiManager();
 
     const String& spoolmanUrl() const { return _url; }
-    const String& apiKey()      const { return _apiKey; }
 
 private:
-    String      _url;
-    String      _apiKey;
+
+    #ifndef PASSWORDS
+    String      _url = "https://spoolman.aghrapid.top/settings";
+    #elif
+
+    #endif
     Preferences _prefs;
 
     /// Writes current URL and API key to NVS flash.
