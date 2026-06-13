@@ -6,6 +6,7 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include <passwords.h>
 
 // ==================== PIN DEFINITIONS (LOLIN S2 Mini) ====================
 #define RFID_SS   13 // SDA
@@ -14,16 +15,18 @@
 #define RFID_MOSI 11
 #define RFID_SCK  12
 
-#define HX711_DT  18
-#define HX711_SCK 21
+#define HX711_DT  16
+#define HX711_SCK 17
 
 // ==================== GLOBALS ====================
 MFRC522 mfrc522(RFID_SS, RFID_RST);
 HX711 scale;
 Preferences prefs;
 
+#ifndef PASSWORDS
 String spoolmanUrl;
 String apiKey;
+#endif
 
 // ==================== WEIGHT STABILISATION ====================
 float readStableWeight(int samples = 5, float maxVariation = 1.5f) {
@@ -130,7 +133,7 @@ bool updateSpoolWeight(int spoolId, float newFilamentWeight, float filamentTotal
 // ==================== SETUP ====================
 void setup() {
     Serial.begin(115200);
-    delay(1000); // allow serial monitor to connect
+    delay(10000); // allow serial monitor to connect
     Serial.println("\n\n========================================");
     Serial.println("Spoolman Headless Scale (LOLIN S2 Mini)");
     Serial.println("========================================\n");
@@ -146,8 +149,16 @@ void setup() {
     float calib = prefs.getFloat("calib", 1.0f);
     prefs.end();
     scale.set_scale(calib);
+
+    //the tare us blocking the program somehow
     scale.tare(10);
-    Serial.printf("[Scale] Ready, calibration factor = %.3f\n", calib);
+
+    //the code below does not work (the printf)
+    //Serial.printf("[Scale] Ready, calibration factor = %.3f\n", calib);
+
+    char buf[64];
+    sprintf(buf, "[Scale] Ready, calibration factor = %s\n", dtostrf(calib, 0, 3, buf + 42)); // careful placement  
+    Serial.println("done");
 
     // ---- Load saved Spoolman config ----
     prefs.begin("spoolman", true);
