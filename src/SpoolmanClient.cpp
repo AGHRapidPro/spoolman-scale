@@ -11,44 +11,87 @@ String SpoolmanClient::_baseUrl() {
     return url;
 }
 
-// void SpoolmanClient::_addAuthHeader(HTTPClient& http) {
-//     if (!_config.apiKey().isEmpty()) {
-//         http.addHeader("X-Api-Key", _config.apiKey());
-//     }
-// }
+bool SpoolmanClient::_refreshCache() {
+    //Load all spools at startup (to later get RFID since API for that is not available)
+    HTTPClient http;
+    String url = _baseUrl() + "spool";
+    Serial.print("  [cache] GET "); Serial.println(url);
+    http.begin(url);
 
-bool SpoolmanClient::fetchSpoolByRFID(const String& uid, SpoolInfo& out) {
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("  WiFi not connected, cannot fetch spool.");
+    int code = http.GET();
+    if (code != 200) {
+        http.end();
+        Serial.printf("  [cache] fetch failed: %d\n", code);
         return false;
     }
 
+    DynamicJsonDocument doc(8192);
+    DeserializationError err = deserializeJson(doc, http.getStream());
+    http.end();
+    if (err) {
+        Serial.println("  [cache] JSON parse failed");
+        return false;
+    }
+
+    _rfidCache.clear();
+    for (JsonObject spool : doc.as<JsonArray>()) {
+        const char* rawRfid = spool["extra"]["rfid"];
+        if (!rawRfid) continue;
+        String uid = String(rawRfid);
+        uid.replace("\"", "");
+        int id = spool["id"];
+        _rfidCache[uid] = id;
+        Serial.printf("  [cache] rfid=%s → spool %d\n", uid.c_str(), id);
+    }
+
+    _cacheLoaded = true;
+    Serial.printf("  [cache] loaded %d entries\n", _rfidCache.size());
+    return true;
+}
+
+bool SpoolmanClient::fetchSpoolByRFID(const String& uid, SpoolInfo& out) {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("  WiFi not connected");
+        return false;
+    }
+
+    // Load cache if empty, or retry on miss
+    if (!_cacheLoaded) _refreshCache();
+
+    auto it = _rfidCache.find(uid);
+    if (it == _rfidCache.end()) {
+        // One retry with fresh cache in case spool was just added
+        Serial.println("  [cache] miss, refreshing...");
+        _refreshCache();
+        it = _rfidCache.find(uid);
+        if (it == _rfidCache.end()) {
+            Serial.println("  No spool found for this RFID.");
+            return false;
+        }
+    }
+
+    int spoolId = it->second;
     HTTPClient http;
-    String url = _baseUrl() + "spool?rfid=" + uid;
+    String url = _baseUrl() + "spool/" + String(spoolId);
     Serial.print("  GET "); Serial.println(url);
     http.begin(url);
-    //_addAuthHeader(http);
 
     int code = http.GET();
-    Serial.printf("  HTTP response code: %d\n", code);
     if (code != 200) {
         http.end();
         return false;
     }
 
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(2048);
     DeserializationError err = deserializeJson(doc, http.getStream());
     http.end();
-    if (err) {
-        Serial.println("  JSON parsing failed");
-        return false;
-    }
+    if (err) return false;
 
     out.id            = doc["id"];
-    out.emptyWeight   = doc["empty_weight"]       | 0.0f;
-    out.filamentTotal = doc["filament"]["weight"]  | 0.0f;
-    out.usedWeight    = doc["used_weight"]         | 0.0f;
-    Serial.printf("  Spool ID=%d, empty=%.1f g, filament total=%.1f g, used=%.1f g\n",
+    out.emptyWeight   = doc["spool_weight"]         | 0.0f;
+    out.filamentTotal = doc["filament"]["weight"]   | 0.0f;
+    out.usedWeight    = doc["used_weight"]          | 0.0f;
+    Serial.printf("  Spool ID=%d, empty=%.1f g, total=%.1f g, used=%.1f g\n",
                   out.id, out.emptyWeight, out.filamentTotal, out.usedWeight);
     return true;
 }
@@ -62,7 +105,6 @@ bool SpoolmanClient::updateSpoolWeight(int spoolId, float filamentWeight, float 
     Serial.print("  PATCH "); Serial.println(url);
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
-    //_addAuthHeader(http);
 
     DynamicJsonDocument doc(256);
     doc["used_weight"] = newUsed;
@@ -81,7 +123,6 @@ bool SpoolmanClient::checkStatus() {
 
     HTTPClient http;
     http.begin(_baseUrl());
-    //_addAuthHeader(http);
     http.setTimeout(5000);
     int code = http.GET();
     http.end();

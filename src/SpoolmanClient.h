@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <HTTPClient.h>
 #include "Config.h"
+#include <map>
 
 /// Data returned by the Spoolman API for a single spool.
 struct SpoolInfo {
@@ -31,7 +32,9 @@ public:
 
 private:
     const Config& _config;
+    std::map<String, int> _rfidCache;  // rfid uid → spool id
+    bool _cacheLoaded = false;
 
-    //void   _addAuthHeader(HTTPClient& http);
-    String _baseUrl();
+    bool        _refreshCache();
+    String      _baseUrl();
 };
