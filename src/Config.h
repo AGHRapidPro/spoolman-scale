@@ -22,7 +22,7 @@ public:
 private:
 
     #ifndef PASSWORDS
-    String      _url = "https://spoolman.aghrapid.top/settings";
+    String      _url = "https://spoolman.aghrapid.top/settings"; //not aplicable for now
     #elif
 
     #endif
