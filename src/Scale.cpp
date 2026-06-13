@@ -8,7 +8,7 @@ void Scale::begin() {
     float calib = _loadCalibration();
     _hx711.set_scale(calib);
     _hx711.tare(10);
-    Serial.printf("[Scale] Ready, calibration factor = %.3f\n", calib);
+    Serial.print("[Scale] Ready, calibration factor = "); Serial.println(calib, 3);
 }
 
 void Scale::tare(int times) {
@@ -44,11 +44,11 @@ float Scale::readStableWeight(int samples, float maxVariation) {
             if (readings[i] > maxVal) maxVal = readings[i];
         }
         float variation = maxVal - minVal;
-        Serial.printf("  Stability: variation=%.2f g, target=%.2f\n", variation, maxVariation);
+        Serial.print("  Stability: variation="); Serial.print(variation, 2); Serial.print(" g, target="); Serial.println(maxVariation, 2);
 
         if (variation < maxVariation) {
             float stable = (minVal + maxVal) / 2.0f;
-            Serial.printf("  Weight stable at %.2f g after %d attempts\n", stable, attempt + 1);
+            Serial.print("  Weight stable at "); Serial.print(stable, 2); Serial.print(" g after "); Serial.print(attempt + 1); Serial.println(" attempts");
             return stable;
         }
         delay(100);
@@ -77,8 +77,8 @@ void Scale::calibrateInteractive() {
     _hx711.set_scale(newFactor);
     _saveCalibration(newFactor);
 
-    Serial.printf("Calibration complete. New factor: %.3f, current reading: %.1f g\n",
-                  newFactor, _hx711.get_units());
+    Serial.print("Calibration complete. New factor: "); Serial.print(newFactor, 3);
+    Serial.print(", current reading: "); Serial.print(_hx711.get_units(), 1); Serial.println(" g");
 }
 
 float Scale::_loadCalibration() {

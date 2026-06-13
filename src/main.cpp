@@ -44,12 +44,12 @@ void loop() {
     }
 
     Serial.println("\n========================================");
-    Serial.printf("[RFID] Tag detected, UID: %s\n", rfid.getUID().c_str());
+    Serial.print("[RFID] Tag detected, UID: "); Serial.println(rfid.getUID());
     rfid.halt();
 
     Serial.println("[Scale] Waiting for stable weight...");
     float measuredTotal = scale.readStableWeight(5, 1.5f);
-    Serial.printf("[Scale] Measured total weight: %.2f g\n", measuredTotal);
+    Serial.print("[Scale] Measured total weight: "); Serial.print(measuredTotal, 2); Serial.println(" g");
 
     Serial.println("[Spoolman] Fetching spool data...");
     SpoolInfo spool;
@@ -62,7 +62,7 @@ void loop() {
 
     float filamentWeight = measuredTotal - spool.emptyWeight;
     if (filamentWeight < 0) filamentWeight = 0;
-    Serial.printf("[Calc] Filament weight = %.2f g (total - empty)\n", filamentWeight);
+    Serial.print("[Calc] Filament weight = "); Serial.print(filamentWeight, 2); Serial.println(" g (total - empty)");
 
     Serial.println("[Spoolman] Updating weight...");
     if (spoolman.updateSpoolWeight(spool.id, filamentWeight, spool.filamentTotal)) {

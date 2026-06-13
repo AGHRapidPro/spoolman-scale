@@ -10,7 +10,7 @@ void Config::load() {
     _prefs.end();
 
     if (_url.length() > 0) {
-        Serial.printf("[Config] Loaded Spoolman URL: %s\n", _url.c_str());
+        Serial.print("[Config] Loaded Spoolman URL: "); Serial.println(_url);
     } 
     else {
         Serial.println("[Config] No saved Spoolman URL.");

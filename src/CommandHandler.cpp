@@ -24,7 +24,7 @@ void CommandHandler::_dispatch(const String& raw) {
     cmd.toUpperCase();
 
     if (cmd == "WEIGHT") {
-        Serial.printf("WEIGHT: %.2f g\n", _scale.readWeight(5));
+        Serial.print("WEIGHT: "); Serial.print(_scale.readWeight(5), 2); Serial.println(" g");
     }
     else if (cmd == "TARE") {
         _scale.tare(10);
@@ -32,7 +32,7 @@ void CommandHandler::_dispatch(const String& raw) {
     }
     else if (cmd == "RFID") {
         const String& uid = _rfid.getUID();
-        if (uid.length() > 0) Serial.printf("RFID: %s\n", uid.c_str());
+        if (uid.length() > 0) { Serial.print("RFID: "); Serial.println(uid); }
         else                   Serial.println("RFID: none");
     }
     else if (cmd == "SPL_STATUS") {
@@ -46,9 +46,7 @@ void CommandHandler::_dispatch(const String& raw) {
     }
     else if (cmd == "WIFI_STATUS") {
         if (WiFi.status() == WL_CONNECTED) {
-            Serial.printf("WIFI_STATUS: %s, IP: %s\n",
-                          WiFi.SSID().c_str(),
-                          WiFi.localIP().toString().c_str());
+            Serial.print("WIFI_STATUS: "); Serial.print(WiFi.SSID()); Serial.print(", IP: "); Serial.println(WiFi.localIP().toString());
         } else {
             Serial.println("WIFI_STATUS: none");
         }
@@ -57,6 +55,6 @@ void CommandHandler::_dispatch(const String& raw) {
         _scale.calibrateInteractive();
     }
     else {
-        Serial.printf("Unknown command: %s\n", cmd.c_str());
+        Serial.print("Unknown command: "); Serial.println(cmd);
     }
 }

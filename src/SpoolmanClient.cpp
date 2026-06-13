@@ -21,7 +21,7 @@ bool SpoolmanClient::_refreshCache() {
     int code = http.GET();
     if (code != 200) {
         http.end();
-        Serial.printf("  [cache] fetch failed: %d\n", code);
+        Serial.print("  [cache] fetch failed: "); Serial.println(code);
         return false;
     }
 
@@ -41,11 +41,11 @@ bool SpoolmanClient::_refreshCache() {
         uid.replace("\"", "");
         int id = spool["id"];
         _rfidCache[uid] = id;
-        Serial.printf("  [cache] rfid=%s → spool %d\n", uid.c_str(), id);
+        Serial.print("  [cache] rfid="); Serial.print(uid); Serial.print(" -> spool "); Serial.println(id);
     }
 
     _cacheLoaded = true;
-    Serial.printf("  [cache] loaded %d entries\n", _rfidCache.size());
+    Serial.print("  [cache] loaded "); Serial.print(_rfidCache.size()); Serial.println(" entries");
     return true;
 }
 
@@ -91,8 +91,10 @@ bool SpoolmanClient::fetchSpoolByRFID(const String& uid, SpoolInfo& out) {
     out.emptyWeight   = doc["spool_weight"]         | 0.0f;
     out.filamentTotal = doc["filament"]["weight"]   | 0.0f;
     out.usedWeight    = doc["used_weight"]          | 0.0f;
-    Serial.printf("  Spool ID=%d, empty=%.1f g, total=%.1f g, used=%.1f g\n",
-                  out.id, out.emptyWeight, out.filamentTotal, out.usedWeight);
+    Serial.print("  Spool ID="); Serial.print(out.id);
+    Serial.print(", empty="); Serial.print(out.emptyWeight, 1);
+    Serial.print(" g, total="); Serial.print(out.filamentTotal, 1);
+    Serial.print(" g, used="); Serial.print(out.usedWeight, 1); Serial.println(" g");
     return true;
 }
 
@@ -113,7 +115,7 @@ bool SpoolmanClient::updateSpoolWeight(int spoolId, float filamentWeight, float 
     Serial.print("  Body: "); Serial.println(body);
 
     int code = http.PATCH(body);
-    Serial.printf("  HTTP response code: %d\n", code);
+    Serial.print("  HTTP response code: "); Serial.println(code);
     http.end();
     return (code == 200);
 }
