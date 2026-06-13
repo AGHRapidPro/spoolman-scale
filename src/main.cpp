@@ -22,6 +22,7 @@
 MFRC522 mfrc522(RFID_SS, RFID_RST);
 HX711 scale;
 Preferences prefs;
+String lastRFID = "";   // stores last successfully read RFID UID
 
 #ifndef PASSWORDS
 String spoolmanUrl;
@@ -105,6 +106,44 @@ bool fetchSpoolByRFID(const String& uid, int& spoolId, float& emptyWeight,
     return true;
 }
 
+// ==================== UART COMMAND HANDLER ====================
+
+// Interactive 1kg calibration
+void calibrateOneKg() {
+    Serial.println("1kg Calibration: Remove all weight, then press Enter.");
+    // Wait for user to press Enter (ignore the actual line content)
+    while (!Serial.available()) { delay(100); }
+    Serial.readStringUntil('\n');   // consume the line
+
+    // Tare with nothing on the scale
+    scale.tare(10);
+    Serial.println("Tare done. Place exactly 1kg (1000g) weight on the scale, then press Enter.");
+    while (!Serial.available()) { delay(100); }
+    Serial.readStringUntil('\n');
+
+    // Take 10 readings and average them
+    float sum = 0;
+    for (int i = 0; i < 10; i++) {
+        sum += scale.get_units();
+        delay(100);
+    }
+    float raw = sum / 10;
+
+    // Compute new calibration factor so that raw becomes 1000g
+    float newFactor = raw / 1000.0f;
+    scale.set_scale(newFactor);
+
+    // Save to preferences
+    prefs.begin("scale", false);
+    prefs.putFloat("calib", newFactor);
+    prefs.end();
+
+    // Quick verification
+    float check = scale.get_units();
+    Serial.printf("Calibration complete. New factor: %.3f, current reading: %.1f g\n",
+                  newFactor, check);
+}
+
 bool updateSpoolWeight(int spoolId, float newFilamentWeight, float filamentTotal) {
     float newUsed = filamentTotal - newFilamentWeight;
     if (newUsed < 0) newUsed = 0;
@@ -130,6 +169,87 @@ bool updateSpoolWeight(int spoolId, float newFilamentWeight, float filamentTotal
     return (code == 200);
 }
 
+// ==================== UART COMMAND HANDLER ====================
+void processCommand(String cmd) {
+    cmd.toUpperCase();
+    if (cmd == "WEIGHT") {
+        // Quick average of 5 readings
+        float w = 0;
+        for (int i = 0; i < 5; i++) {
+            w += scale.get_units();
+            delay(10);
+        }
+        w /= 5;
+        Serial.printf("WEIGHT: %.2f g\n", w);
+    }
+    else if (cmd == "TARE") {
+        scale.tare(10);
+        Serial.println("TARE: done");
+    }
+    else if (cmd == "RFID") {
+        if (lastRFID.length() > 0) {
+            Serial.printf("RFID: %s\n", lastRFID.c_str());
+        } else {
+            Serial.println("RFID: none");
+        }
+    }
+    else if (cmd == "SPL_STATUS") {
+        if (spoolmanUrl.length() == 0) {
+            Serial.println("SPL_STATUS: none (no URL configured)");
+            return;
+        }
+        if (WiFi.status() != WL_CONNECTED) {
+            Serial.println("SPL_STATUS: none (WiFi not connected)");
+            return;
+        }
+        HTTPClient http;
+        String url = spoolmanUrl;
+        if (!url.endsWith("/")) url += "/";
+        http.begin(url);
+        if (!apiKey.isEmpty()) http.addHeader("X-Api-Key", apiKey);
+        http.setTimeout(5000);
+        int code = http.GET();
+        http.end();
+        if (code > 0) {
+            Serial.printf("SPL_STATUS: connected (HTTP %d)\n", code);
+        } else {
+            Serial.println("SPL_STATUS: none");
+        }
+    }
+    else if (cmd == "WIFI_STATUS") {
+        if (WiFi.status() == WL_CONNECTED) {
+            Serial.printf("WIFI_STATUS: %s, IP: %s\n",
+                          WiFi.SSID().c_str(),
+                          WiFi.localIP().toString().c_str());
+        } else {
+            Serial.println("WIFI_STATUS: none");
+        }
+    }
+    else if (cmd == "ONE_KG_SCALE") {
+        calibrateOneKg();
+    }
+    else {
+        Serial.printf("Unknown command: %s\n", cmd.c_str());
+    }
+}
+void handleSerialCommands() {
+    static String inputBuffer = "";
+    while (Serial.available()) {
+        char c = Serial.read();
+        if (c == '\n' || c == '\r') {
+            if (c == '\r') continue; // ignore carriage return
+            inputBuffer.trim();
+            if (inputBuffer.length() > 0) {
+                processCommand(inputBuffer);
+            }
+            inputBuffer = "";
+            return; // process one command per call to avoid long blocking
+        } else {
+            inputBuffer += c;
+        }
+    }
+}
+
 // ==================== SETUP ====================
 void setup() {
     Serial.begin(115200);
@@ -150,11 +270,8 @@ void setup() {
     prefs.end();
     scale.set_scale(calib);
 
-    //the tare us blocking the program somehow
+    //the tare is blocking the program somehow
     scale.tare(10);
-
-    //the code below does not work (the printf)
-    //Serial.printf("[Scale] Ready, calibration factor = %.3f\n", calib);
 
     char buf[64];
     sprintf(buf, "[Scale] Ready, calibration factor = %s\n", dtostrf(calib, 0, 3, buf + 42)); // careful placement  
@@ -207,13 +324,24 @@ void setup() {
 
 // ==================== MAIN LOOP ====================
 void loop() {
-    // Wait for a new RFID tag
+    handleSerialCommands();
+
+    // Wait for a new RFID tag – process commands while waiting
     if (!mfrc522.PICC_IsNewCardPresent()) {
-        delay(100);
+        unsigned long start = millis();
+        while (!mfrc522.PICC_IsNewCardPresent() && (millis() - start < 100)) {
+            handleSerialCommands();
+            delay(1);
+        }
         return;
     }
+
     if (!mfrc522.PICC_ReadCardSerial()) {
-        delay(100);
+        unsigned long start = millis();
+        while (!mfrc522.PICC_ReadCardSerial() && (millis() - start < 100)) {
+            handleSerialCommands();
+            delay(1);
+        }
         return;
     }
 
@@ -223,6 +351,7 @@ void loop() {
         if (mfrc522.uid.uidByte[i] < 0x10) uid += "0";
         uid += String(mfrc522.uid.uidByte[i], HEX);
     }
+    lastRFID = uid;   // store for the RFID command
     Serial.println("\n========================================");
     Serial.print("[RFID] Tag detected, UID: ");
     Serial.println(uid);
@@ -239,7 +368,12 @@ void loop() {
     float emptyWeight, filamentTotal, usedWeight;
     if (!fetchSpoolByRFID(uid, spoolId, emptyWeight, filamentTotal, usedWeight)) {
         Serial.println("[ERROR] Spool not found or server unreachable.");
-        delay(2000);
+        // Wait 3 seconds, but process commands
+        unsigned long postDelay = millis();
+        while (millis() - postDelay < 3000) {
+            handleSerialCommands();
+            delay(10);
+        }
         return;
     }
 
@@ -255,7 +389,12 @@ void loop() {
         Serial.println("[ERROR] Failed to update weight.\n");
     }
 
-    delay(3000); //szmeges
+    // Wait 3 seconds, but keep processing commands
+    unsigned long postDelay = millis();
+    while (millis() - postDelay < 3000) {
+        handleSerialCommands();
+        delay(10);
+    }
 }
 
 // ==================== CALIBRATION (uncomment and run once) ====================
